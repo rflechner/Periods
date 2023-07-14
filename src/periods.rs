@@ -3,13 +3,13 @@ use std::ops::Add;
 use std::iter::{Map};
 use chrono::{NaiveDate, NaiveTime, NaiveDateTime, Duration, Datelike, Month};
 
-
+#[derive(Copy, Clone)]
 pub struct Period {
   start: NaiveDateTime,
   end: NaiveDateTime,
 }
 
-pub struct ByDurationPeriodIterator {
+struct ByDurationPeriodIterator {
   duration: Duration,
   current_start: NaiveDateTime,
   end: NaiveDateTime,
@@ -30,6 +30,95 @@ impl Iterator for ByDurationPeriodIterator {
     } else {
       None
     }
+  }
+}
+
+struct ByMonthPeriodIterator {
+  start_date: NaiveDate,
+  end_date: NaiveDate,
+  start_year:i32,
+  end_year:i32,
+  start_month:u32,
+  end_month:u32,
+
+  year:i32,
+  month:u32,
+
+  start_month_index:u32,
+  end_month_index:u32,
+}
+
+impl ByMonthPeriodIterator {
+
+  pub fn from (source:Period) -> ByMonthPeriodIterator {
+    let start_date = source.start.date();
+    let end_date = source.end.date();
+    let start_year = start_date.year();
+    let end_year = end_date.year();
+    let start_month = start_date.month();
+    let end_month = end_date.month();
+
+    ByMonthPeriodIterator {
+      start_date,
+      end_date,
+      start_year,
+      end_year,
+      start_month,
+      end_month,
+      year: start_year,
+      month: start_month,
+      start_month_index: start_month,
+      end_month_index: if start_year == end_year { end_month } else { 12 }
+    }
+  }
+
+}
+
+impl Iterator for ByMonthPeriodIterator {
+  
+  type Item = Period;
+
+  fn next(&mut self) -> Option<Period> {
+
+    if self.start_year > self.end_year {
+      return None;
+    }
+      
+    if self.month > self.end_month_index {
+      if self.year >= self.end_year {
+        return None;
+      }
+      self.year += 1;
+
+      self.start_month_index = if self.year == self.start_year { self.start_month } else { 1 };
+      self.end_month_index = if self.year == self.end_year { self.end_month } else { 12 };
+
+      self.month = 1;
+    }
+
+    if self.start_month_index <= self.end_month_index {
+      let first_day = NaiveDate::from_ymd_opt(self.year, self.month, 1)?;
+      let last_day = if self.year == self.end_year && self.month == self.end_month {
+        if first_day >= self.end_date {
+          return None;
+        }
+        self.end_date
+      } else {
+        let next_month = if self.month == 12 { 1 } else { self.month + 1 };
+        let year = if self.month == 12 { self.year+1 } else { self.year };
+        NaiveDate::from_ymd_opt(year, next_month, 1).unwrap()
+      };
+
+      let period = Period::new(
+          NaiveDateTime::new(first_day, NaiveTime::from_hms_opt(0, 0, 0).unwrap()),
+          NaiveDateTime::new(last_day, NaiveTime::from_hms_opt(0, 0, 0).unwrap()),
+      ).expect("Cannot create period");
+      
+      self.month += 1;
+      return Some(period);
+    }
+
+    None
   }
 }
 
@@ -91,41 +180,8 @@ impl Period {
   }
 
   /// split period to one month duration periods.
-  pub fn get_all_months(&self) -> Vec<Period> {
-    let start_date = self.start.date();
-    let end_date = self.end.date();
-    let start_year = start_date.year();
-    let end_year = end_date.year();
-    let start_month = start_date.month();
-    let end_month = end_date.month();
-    let mut months = Vec::new();
-
-    for year in start_year..=end_year {
-        let start_month_index = if year == start_year { start_month } else { 1 };
-        let end_month_index = if year == end_year { end_month } else { 12 };
-
-        for month in start_month_index..=end_month_index {
-            let first_day = NaiveDate::from_ymd_opt(year, month, 1).unwrap();
-            let last_day = if year == end_year && month == end_month {
-              if first_day >= end_date {
-                break;
-              }
-              end_date
-            } else {
-              let next_month = if month == 12 { 1 } else { month + 1 };
-              let year = if month == 12 { year+1 } else { year };
-              NaiveDate::from_ymd_opt(year, next_month, 1).unwrap()
-            };
-
-            let period = Period::new(
-                NaiveDateTime::new(first_day, NaiveTime::from_hms_opt(0, 0, 0).unwrap()),
-                NaiveDateTime::new(last_day, NaiveTime::from_hms_opt(0, 0, 0).unwrap()),
-            ).expect("Cannot create period");
-            months.push(period);
-        }
-    }
-
-    months
+  pub fn get_all_months(&self) -> impl Iterator<Item = Period> {
+    ByMonthPeriodIterator::from(*self)
   }
 
   /// check if two periods intersect.
@@ -260,7 +316,7 @@ fn test_get_all_months() {
     let end_datetime = NaiveDate::from_ymd_opt(2024, 1, 01).unwrap().and_time(NaiveTime::MIN);
 
     let period = Period::new(start_datetime, end_datetime).expect("Cannot create period");
-    let months: Vec<Period> = period.get_all_months();
+    let months: Vec<Period> = period.get_all_months().collect();
 
     let view: Vec<String> = months.iter().map(|p| p.to_string()).collect();
 
