@@ -26,7 +26,7 @@ impl Period {
   }
 
   /// Create a one day length period from a string.
-  pub fn one_day_from_str(s: &str, fmt: Option<&str>) -> Period {
+  pub fn one_day_from_str(s: &str, fmt: Option<&str>) -> Self {
     let start = NaiveDate::parse_from_str(s, fmt.unwrap_or("%Y-%m-%d")).unwrap().and_time(NaiveTime::MIN);
     let end = start.add(Duration::days(1));
 
@@ -34,11 +34,11 @@ impl Period {
   }
 
   /// Create a period from strings.
-  pub fn from_strings(start: &str, end: &str, fmt: Option<&str>) -> Period {
+  pub fn from_strings(start: &str, end: &str, fmt: Option<&str>) -> Result<Self, String> {
     let start = NaiveDate::parse_from_str(start, fmt.unwrap_or("%Y-%m-%d")).unwrap().and_time(NaiveTime::MIN);
     let end = NaiveDate::parse_from_str(end, fmt.unwrap_or("%Y-%m-%d")).unwrap().and_time(NaiveTime::MIN);
 
-    Self { start, end }
+    Self::new(start, end)
   }
 
   /// Compute period duration.
@@ -134,9 +134,9 @@ fn periods_shoud_not_intersect() {
 
 #[test]
 fn periods_shoud_intersect() {
-  let p1 = Period::from_strings("2023-07-14", "2023-07-20", None);
-  let p2 = Period::from_strings("2023-07-16", "2023-07-18", None);
-  let p3 = Period::from_strings("2023-07-10", "2023-07-16", None);
+  let p1 = Period::from_strings("2023-07-14", "2023-07-20", None).unwrap();
+  let p2 = Period::from_strings("2023-07-16", "2023-07-18", None).unwrap();
+  let p3 = Period::from_strings("2023-07-10", "2023-07-16", None).unwrap();
 
   assert!(p1.intersect(&p2));
   assert!(p1.intersect(&p3));
