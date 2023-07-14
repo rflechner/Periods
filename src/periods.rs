@@ -1,17 +1,21 @@
+use std::fmt;
 use std::ops::Add;
 use std::iter::{Map};
 use chrono::{NaiveDate, NaiveTime, NaiveDateTime, Duration, Datelike, Month};
+
 
 pub struct Period {
   start: NaiveDateTime,
   end: NaiveDateTime,
 }
 
-impl Period {
-
-  fn to_string(&self) -> String {
-      format!("[{};{}[", self.start, self.end)
+impl fmt::Display for Period {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "[{};{}[", self.start, self.end)
   }
+}
+
+impl Period {
 
   pub fn new(start: NaiveDateTime, end: NaiveDateTime) -> Result<Self, String> {
     if end <= start {
@@ -21,6 +25,7 @@ impl Period {
     }
   }
 
+  /// Create a one day length period from a string.
   pub fn one_day_from_str(s: &str, fmt: Option<&str>) -> Period {
     let start = NaiveDate::parse_from_str(s, fmt.unwrap_or("%Y-%m-%d")).unwrap().and_time(NaiveTime::MIN);
     let end = start.add(Duration::days(1));
@@ -28,10 +33,20 @@ impl Period {
     Self { start, end }
   }
 
+  /// Create a period from strings.
+  pub fn from_strings(start: &str, end: &str, fmt: Option<&str>) -> Period {
+    let start = NaiveDate::parse_from_str(start, fmt.unwrap_or("%Y-%m-%d")).unwrap().and_time(NaiveTime::MIN);
+    let end = NaiveDate::parse_from_str(end, fmt.unwrap_or("%Y-%m-%d")).unwrap().and_time(NaiveTime::MIN);
+
+    Self { start, end }
+  }
+
+  /// Compute period duration.
   pub fn duration(&self) -> chrono::Duration {
       self.end.signed_duration_since(self.start)
   }
 
+  /// Split a period from a duration into sub periods
   pub fn split_in_periods(&self, duration: Duration) -> Vec<Period> {
     let mut current_start = self.start;
     let mut periods = Vec::new();
@@ -45,18 +60,22 @@ impl Period {
     periods
   }
 
+  /// split period to one day duration periods.
   pub fn get_all_days(&self) -> Vec<Period> { 
     self.split_in_periods(Duration::days(1))
   }
 
+  /// split period to one hour duration periods.
   pub fn get_all_hours(&self) -> Vec<Period> { 
     self.split_in_periods(Duration::hours(1))
   }
 
+  /// split period to one week duration periods.
   pub fn get_all_weeks(&self) -> Vec<Period> { 
     self.split_in_periods(Duration::weeks(1))
   }
 
+  /// split period to one month duration periods.
   pub fn get_all_months(&self) -> Vec<Period> {
     let start_date = self.start.date();
     let end_date = self.end.date();
@@ -94,6 +113,33 @@ impl Period {
     months
   }
 
+  pub fn intersect(&self, other: &Period) -> bool {
+    self.start < other.end && self.end > other.start
+  }
+
+}
+
+
+#[test]
+fn periods_shoud_not_intersect() {
+  let p1 = Period::one_day_from_str("2023-07-14", None);
+  let p2 = Period::one_day_from_str("2023-07-15", None);
+  let p3 = Period::one_day_from_str("2023-08-15", None);
+
+  assert!(!p1.intersect(&p2));
+  assert!(!p1.intersect(&p3));
+  assert!(!p2.intersect(&p1));
+  assert!(!p3.intersect(&p2));
+}
+
+#[test]
+fn periods_shoud_intersect() {
+  let p1 = Period::from_strings("2023-07-14", "2023-07-20", None);
+  let p2 = Period::from_strings("2023-07-16", "2023-07-18", None);
+  let p3 = Period::from_strings("2023-07-10", "2023-07-16", None);
+
+  assert!(p1.intersect(&p2));
+  assert!(p1.intersect(&p3));
 }
 
 #[test]
