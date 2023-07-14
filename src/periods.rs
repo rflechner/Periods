@@ -9,6 +9,30 @@ pub struct Period {
   end: NaiveDateTime,
 }
 
+pub struct ByDurationPeriodIterator {
+  duration: Duration,
+  current_start: NaiveDateTime,
+  end: NaiveDateTime,
+}
+
+impl Iterator for ByDurationPeriodIterator {
+  
+  type Item = Period;
+
+  fn next(&mut self) -> Option<Period> {
+    if self.current_start + self.duration <= self.end {
+      let current_end = self.current_start + self.duration;
+      
+      let n = Period::new(self.current_start, current_end).unwrap();
+
+      self.current_start = current_end;
+      Some(n)
+    } else {
+      None
+    }
+  }
+}
+
 impl fmt::Display for Period {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(f, "[{};{}[", self.start, self.end)
@@ -47,31 +71,22 @@ impl Period {
   }
 
   /// Split a period from a duration into sub periods
-  pub fn split_in_periods(&self, duration: Duration) -> Vec<Period> {
-    let mut current_start = self.start;
-    let mut periods = Vec::new();
-
-    while current_start + duration <= self.end {
-        let current_end = current_start + duration;
-        periods.push(Period::new(current_start, current_end).unwrap());
-        current_start = current_end;
-    }
-
-    periods
+  pub fn split_in_periods(&self, duration: Duration) -> impl Iterator<Item = Period> {
+    ByDurationPeriodIterator { current_start: self.start, end:self.end, duration  }
   }
 
   /// split period to one day duration periods.
-  pub fn get_all_days(&self) -> Vec<Period> { 
+  pub fn get_all_days(&self) -> impl Iterator<Item = Period> { 
     self.split_in_periods(Duration::days(1))
   }
 
   /// split period to one hour duration periods.
-  pub fn get_all_hours(&self) -> Vec<Period> { 
+  pub fn get_all_hours(&self) -> impl Iterator<Item = Period> { 
     self.split_in_periods(Duration::hours(1))
   }
 
   /// split period to one week duration periods.
-  pub fn get_all_weeks(&self) -> Vec<Period> { 
+  pub fn get_all_weeks(&self) -> impl Iterator<Item = Period> { 
     self.split_in_periods(Duration::weeks(1))
   }
 
@@ -113,6 +128,7 @@ impl Period {
     months
   }
 
+  /// check if two periods intersect.
   pub fn intersect(&self, other: &Period) -> bool {
     self.start < other.end && self.end > other.start
   }
@@ -148,7 +164,7 @@ fn duration_should_be_10() {
     let end = NaiveDateTime::parse_from_str("2023-07-21 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
 
     let period = Period::new(start, end).expect("Cannot create period");
-    let days = period.get_all_days();
+    let days: Vec<Period> = period.get_all_days().collect();
 
     assert_eq!(days.len(), 10);
 }
@@ -169,7 +185,7 @@ fn test_get_all_days() {
     let end_datetime = NaiveDate::from_ymd_opt(2023, 7, 15).unwrap().and_time(NaiveTime::MIN);
 
     let period = Period::new(start_datetime, end_datetime).expect("Cannot create period");
-    let days = period.get_all_days();
+    let days: Vec<Period> = period.get_all_days().collect();
 
     assert_eq!(days.len(), 4);
 
@@ -190,7 +206,7 @@ fn test_get_all_days() {
 #[test]
 fn test_get_all_hours() {
     let period = Period::one_day_from_str("2023-07-14", None);
-    let hours = period.get_all_hours();
+    let hours: Vec<Period> = period.get_all_hours().collect();
 
     assert_eq!(hours.len(), 24);
 
@@ -209,7 +225,7 @@ fn test_get_all_weeks() {
     let end_datetime = NaiveDate::from_ymd_opt(2023, 9, 01).unwrap().and_time(NaiveTime::MIN);
 
     let period = Period::new(start_datetime, end_datetime).expect("Cannot create period");
-    let weeks = period.get_all_weeks();
+    let weeks: Vec<Period> = period.get_all_weeks().collect();
 
     assert_eq!(weeks.len(), 8);
 
