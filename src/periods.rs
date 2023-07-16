@@ -1,7 +1,6 @@
 use std::fmt;
 use std::ops::Add;
-use std::iter::{Map};
-use chrono::{NaiveDate, NaiveTime, NaiveDateTime, Duration, Datelike, Month, Months};
+use chrono::{NaiveDate, NaiveTime, NaiveDateTime, Duration, Datelike, Months};
 
 #[derive(Copy, Clone)]
 pub struct Period {
@@ -92,8 +91,113 @@ impl Period {
     self.start < other.end && self.end > other.start
   }
 
+  /// check if a period is contiguous and before.
+  pub fn is_contiguous_before(&self, other: &Period) -> bool {
+    self.end == other.start
+  }
+
+  /// check if a period is contiguous and after.
+  pub fn is_contiguous_after(&self, other: &Period) -> bool {
+    self.start == other.end
+  }
+
+  /// check if two periods are contiguous.
+  pub fn is_contiguous(&self, other: &Period) -> bool {
+    self.is_contiguous_before(other) || self.is_contiguous_after(other)
+  }
+
 }
 
+#[derive(Copy, Clone)]
+pub struct PeriodValue<I>
+{
+    pub period: Period,
+    pub value: I
+}
+impl<I> fmt::Display for PeriodValue<I> where I : std::fmt::Display {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "{}:{}", self.period, self.value)
+  }
+}
+
+#[macro_export]
+macro_rules! one_day_value {
+  ($date:expr, $value:expr) => {
+      PeriodValue {
+          period: Period::one_day_from_str($date, None),
+          value: $value,
+      }
+  };
+}
+
+#[macro_export]
+macro_rules! period_days_value {
+  ($from:expr, $to:expr, $value:expr) => {
+      PeriodValue {
+          period: Period::from_strings($from, $to, None).unwrap(),
+          value: $value,
+      }
+  };
+}
+
+pub fn merge_contiguous_periods(periods: impl Iterator<Item = Period>) -> impl Iterator<Item = Period> {
+  // periods
+  //     .scan(None, |state: &mut Option<Period>, current_period| {
+  //         if let Some(previous_period) = state {
+  //             if previous_period.end == current_period.start {
+  //                 previous_period.end = current_period.end;
+  //                 return None;
+  //             }
+  //         }
+  //         *state = Some(current_period);
+  //         Some(current_period)
+  //     })
+  let mut iter = periods.peekable();
+
+  std::iter::from_fn(move || {
+      while let Some(current) = iter.next() {
+          if let Some(next) = iter.peek() {
+              if current.end == next.start {
+                  continue;
+              }
+          }
+          return Some(current);
+      }
+      None
+  })
+}
+
+#[test]
+fn period_should_be_contiguous_before() {
+  let p1 = Period::one_day_from_str("2023-07-14", None);
+  let p2 = Period::one_day_from_str("2023-07-15", None);
+
+  assert!(p1.is_contiguous_before(&p2));
+}
+
+#[test]
+fn period_should_not_be_contiguous_before() {
+  let p1 = Period::one_day_from_str("2023-07-13", None);
+  let p2 = Period::one_day_from_str("2023-07-15", None);
+
+  assert!(!p1.is_contiguous_before(&p2));
+}
+
+#[test]
+fn period_should_be_contiguous_after() {
+  let p1 = Period::one_day_from_str("2023-07-14", None);
+  let p2 = Period::one_day_from_str("2023-07-15", None);
+
+  assert!(p2.is_contiguous_after(&p1));
+}
+
+#[test]
+fn period_should_not_be_contiguous_after() {
+  let p1 = Period::one_day_from_str("2023-07-14", None);
+  let p2 = Period::one_day_from_str("2023-07-16", None);
+
+  assert!(!p2.is_contiguous_after(&p1));
+}
 
 #[test]
 fn periods_shoud_not_intersect() {
